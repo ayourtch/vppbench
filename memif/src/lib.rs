@@ -628,6 +628,10 @@ pub fn memif_refill_queue(
 }
 
 pub fn connect_to_memif(socket_path: &str) -> anyhow::Result<MemifConn> {
+    connect_to_memif_id(socket_path, 0)
+}
+
+pub fn connect_to_memif_id(socket_path: &str, id: u32) -> anyhow::Result<MemifConn> {
     let sock = uds::UnixSeqpacketConn::connect(socket_path)?;
 
     let mut message: [u8; 2048] = [0; 2048];
@@ -668,7 +672,7 @@ pub fn connect_to_memif(socket_path: &str) -> anyhow::Result<MemifConn> {
                         major: MEMIF_VERSION_MAJOR as u8,
                         minor: MEMIF_VERSION_MINOR as u8,
                     },
-                    id: 0,
+                    id,
                     mode: MemifInterfaceMode::Ethernet,
                     secret: [0; 24],
                     name: [0x42; 32],
