@@ -1,4 +1,5 @@
 use memif::*;
+use oside::protocols::geneve::*;
 
 fn main() -> anyhow::Result<()> {
     use oside::protocols::all::*;
@@ -21,16 +22,17 @@ fn main() -> anyhow::Result<()> {
             }
         */
         let mut pkts = memif_rx_burst(&conn, 0, 32);
-        println!("pkts: {}", pkts.len());
+        // println!("pkts: {}", pkts.len());
         for p in &pkts {
-            println!("    len {}", p.len);
+            // println!("    len {}", p.len);
             let end = p.len as usize;
             let data = &p.data[0..end];
             let sca = Ether!().ldecode(data).unwrap().0;
             let addr = "01:02:03:04:05:06";
+	    // println!("Received packet: {:?}", &sca);
 
             if let Some(arp) = sca.get_layer(ARP!()) {
-                println!("ARP request!");
+                // println!("ARP request!");
                 let reply = Ether!(src = addr, dst = sca[Ether!()].src.clone())
                     / ARP!(
                         op = 2,
@@ -39,7 +41,7 @@ fn main() -> anyhow::Result<()> {
                         hwsrc = addr,
                         psrc = sca[ARP!()].pdst.value()
                     );
-                println!("Reply: {:?}", &reply);
+                // println!("Reply: {:?}", &reply);
                 let bytes = reply.lencode();
                 let mut bufs = memif_buffer_alloc(&conn, 0, 1, 2048);
                 bufs[0].len = bytes.len() as u32;
@@ -51,9 +53,12 @@ fn main() -> anyhow::Result<()> {
                     );
                 }
                 memif_tx_burst(&conn, 0, bufs);
-            } else {
-                if let Some(icmpecho) = sca.get_layer(Echo!()) {
+            } else if let Some(geneve) = sca.get_layer(GENEVE!()) {
+		    // println!("GENEVE packet!");
                     let reply = Ether!(src = addr, dst = sca[Ether!()].src.clone())
+                        / IP!(dst = sca[IP!()].src.value(), src = sca[IP!()].dst.value())
+			/ UDP!()
+			/ GENEVE!(vni = 42)
                         / IP!(dst = sca[IP!()].src.value(), src = sca[IP!()].dst.value())
                         / ICMP!()
                         / EchoReply!(
@@ -61,7 +66,7 @@ fn main() -> anyhow::Result<()> {
                             sequence = sca[Echo!()].sequence.value()
                         )
                         / Raw!(sca[Raw!()].data.clone());
-                    println!("Reply: {:?}", &reply);
+                    // println!("Reply: {:?}", &reply);
                     let bytes = reply.lencode();
                     let mut bufs = memif_buffer_alloc(&conn, 0, 1, 2048);
                     bufs[0].len = bytes.len() as u32;
@@ -73,9 +78,31 @@ fn main() -> anyhow::Result<()> {
                         );
                     }
                     memif_tx_burst(&conn, 0, bufs);
-                }
-            }
-            println!("Sca: {:?}", &sca);
+            } else if let Some(icmpecho) = sca.get_layer(Echo!()) {
+                    let reply = Ether!(src = addr, dst = sca[Ether!()].src.clone())
+                        / IP!(dst = sca[IP!()].src.value(), src = sca[IP!()].dst.value())
+                        / ICMP!()
+                        / EchoReply!(
+                            identifier = sca[Echo!()].identifier.value(),
+                            sequence = sca[Echo!()].sequence.value()
+                        )
+                        / Raw!(sca[Raw!()].data.clone());
+                    // println!("Reply: {:?}", &reply);
+                    let bytes = reply.lencode();
+                    let mut bufs = memif_buffer_alloc(&conn, 0, 1, 2048);
+                    bufs[0].len = bytes.len() as u32;
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            bytes.as_ptr(),
+                            bufs[0].data.as_mut_ptr(),
+                            bytes.len(),
+                        );
+                    }
+                    memif_tx_burst(&conn, 0, bufs);
+            } else {
+	           println!("Unknown");
+	    }
+            // println!("Sca: {:?}", &sca);
         }
         /*memif_buffer_enq_tx(&conn, &conn.rx_queues[0], 0, &mut pkts);
         memif_tx_burst(&conn, 0, pkts);
@@ -83,7 +110,7 @@ fn main() -> anyhow::Result<()> {
             println!("{:?}", &pkts[0]);
         } */
         */
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        // std::thread::sleep(std::time::Duration::from_secs(1));
     }
 
     Ok(())
