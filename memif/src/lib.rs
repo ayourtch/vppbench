@@ -208,12 +208,12 @@ struct MemifDesc {
 // Note: Rust doesn't directly support flexible array members as in C.
 // `desc` in `MemifRing` must be handled differently, potentially with Vec<MemifDesc> or similar.
 #[repr(C, align(64))]
-struct MemifRing {
+pub struct MemifRing {
     cookie: u32,
     flags: u16,
-    head: VolatileCell<u16>,
+    pub head: VolatileCell<u16>,
     _reserved1: [u8; 120],
-    tail: VolatileCell<u16>,
+    pub tail: VolatileCell<u16>,
     _reserved2: [u8; 62 + 8],
     // desc: Vec<MemifDesc>, // An example alternative for flexible array member
 }
@@ -251,16 +251,19 @@ fn get_memif_ring_size(args: &MemifArgs) -> u32 {
 
 fn memif_add_region(args: &MemifArgs, has_buffers: bool) -> anyhow::Result<MemifRegion> {
     let buffer_offset: u32 = if has_buffers {
-        0
+        //0
+        (args.num_s2m_rings as u32 + args.num_m2s_rings as u32) * get_memif_ring_size(args)
     } else {
         (args.num_s2m_rings as u32 + args.num_m2s_rings as u32) * get_memif_ring_size(args)
     };
     let region_size: u64 = if has_buffers {
+        println!("HAS_BUFFERS: buffer_offset: {:x} buffer_size: {}", buffer_offset, args.buffer_size);
         buffer_offset as u64
             + args.buffer_size as u64
                 * ((1 << args.log2_ring_size) as u64)
                 * (args.num_s2m_rings as u64 + args.num_m2s_rings as u64)
     } else {
+        println!("HAS NO BUFFERS: {:x}", &buffer_offset);
         buffer_offset as u64
     };
     let fd = {
@@ -284,6 +287,7 @@ fn memif_add_region(args: &MemifArgs, has_buffers: bool) -> anyhow::Result<Memif
         use std::num::NonZeroUsize;
 
         let size = NonZeroUsize::new(region_size.try_into()?).unwrap();
+	println!("Region size: {:x}", region_size);
         mman::mmap(
             None,
             size,
@@ -480,6 +484,7 @@ fn memif_init_rings(conn: &mut MemifConn, typ: MemifRingType) {
                 let offs: u32 =
                     conn.regions[0].buffer_offset + slot * (conn.run_args.buffer_size as u32);
                 (*desc).offset = offs;
+		println!("item: {} offset: {:x}", j, offs);
                 (*desc).length = conn.run_args.buffer_size as u32;
             }
         }
@@ -605,7 +610,7 @@ pub fn memif_refill_queue(
         let head = (*ring).head.get();
         slot = head;
         let ns = (1 << mq.log2_ring_size) + mq.last_tail.get() - head;
-        println!("ns: {}", ns);
+        // println!("ns: {}", ns);
         let count = if count < ns { count } else { ns };
         while counter < count {
             let d = memif_get_ring_desc_by_offset(conn, mq.offset, (slot & mask) as u32);
