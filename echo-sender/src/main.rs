@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
     use oside::*;
     use std::convert::TryFrom;
 
-    let addr = "01:02:03:04:05:06";
+    let addr = "06:05:04:03:02:01";
 
     let socket_path = "/run/vpp/memif.sock";
     let mut conn = connect_to_memif_id(socket_path, 1).unwrap();
@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
 	    / GENEVE!(vni =42)
             / IP!(dst = "192.168.0.1", src = "192.168.0.2")
             / ICMP!()
-            / Echo!(identifier = 0, sequence = 0)
+            / Echo!(identifier = 0, sequence = packet_count)
             / Raw!(serialized.into());
         // println!("Request: {:?}", &request);
         let bytes = request.lencode();
@@ -114,6 +114,7 @@ fn main() -> anyhow::Result<()> {
         unsafe {
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), bufs[0].data.as_mut_ptr(), bytes.len());
         }
+	let bufs_len = bufs.len();
         memif_tx_burst(&conn, 0, bufs);
         memif_refill_queue(&conn, 0, 65535, 0);
 	/*
@@ -126,9 +127,10 @@ fn main() -> anyhow::Result<()> {
                 println!("M: {} {}", (*ring).head.get(), (*ring).tail.get());
             }
 	*/
+	packet_count += bufs_len as u16;
 	// println!("Packet count: {}", packet_count);
-	packet_count += 1;
         let mut pkts = memif_rx_burst(&conn, 0, 32);
+	packet_count += pkts.len() as u16;
         // println!("pkts: {}", pkts.len());
         for p in &pkts {
             // println!("    len {}", p.len);
@@ -184,6 +186,8 @@ fn main() -> anyhow::Result<()> {
         } */
         */
        // std::thread::sleep(std::time::Duration::from_millis(1000));
+       // std::thread::sleep(std::time::Duration::from_millis(100));
+       // std::thread::sleep(std::time::Duration::from_nanos(1));
     }
 
     Ok(())

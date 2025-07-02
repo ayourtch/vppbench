@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
             let end = p.len as usize;
             let data = &p.data[0..end];
             let sca = Ether!().ldecode(data).unwrap().0;
-            let addr = "01:02:03:04:05:06";
+            let addr = "02:02:03:04:05:06";
 	    // println!("Received packet: {:?}", &sca);
 
             if let Some(arp) = sca.get_layer(ARP!()) {
