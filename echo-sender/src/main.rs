@@ -84,7 +84,7 @@ fn main() -> anyhow::Result<()> {
 
     let socket_path = "/run/vpp/memif.sock";
     let mut conn = connect_to_memif_id(socket_path, 1).unwrap();
-    let mut packet_count = 0;
+    let mut packet_count: usize = 0;
 
     let mut last_instant = Instant::now();
 
@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
 	    / GENEVE!(vni =42)
             / IP!(dst = "192.168.0.1", src = "192.168.0.2")
             / ICMP!()
-            / Echo!(identifier = 0, sequence = packet_count)
+            / Echo!(identifier = 0, sequence = packet_count as u16)
             / Raw!(serialized.into());
         // println!("Request: {:?}", &request);
         let bytes = request.lencode();
@@ -127,10 +127,10 @@ fn main() -> anyhow::Result<()> {
                 println!("M: {} {}", (*ring).head.get(), (*ring).tail.get());
             }
 	*/
-	packet_count += bufs_len as u16;
+	packet_count += bufs_len;
 	// println!("Packet count: {}", packet_count);
         let mut pkts = memif_rx_burst(&conn, 0, 32);
-	packet_count += pkts.len() as u16;
+	packet_count += pkts.len();
         // println!("pkts: {}", pkts.len());
         for p in &pkts {
             // println!("    len {}", p.len);
